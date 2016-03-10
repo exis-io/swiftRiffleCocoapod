@@ -19,15 +19,15 @@ s.author           = { "Damouse" => "damouse007@gmail.com" }
 s.requires_arc = true
 
 # Options for github distribution. Note that the "true" repo remaps the name of this repo
-#s.source = { :git => "https://github.com/exis-io/swiftRiffleCocoapod.git", :tag => s.version.to_s }
-#s.source_files = 'Pod/Classes/**/*.swift'
-#s.ios.vendored_frameworks = "Pod/Assets/ios/Mantle.framework"
-#s.osx.vendored_frameworks = "Pod/Assets/osx/Mantle.framework"
+# s.source = { :git => "https://github.com/exis-io/swiftRiffleCocoapod.git", :tag => s.version.to_s }
+# s.source_files = 'Pod/Classes/**/*.swift'
+# s.ios.vendored_frameworks = "Pod/Assets/ios/Mantle.framework"
+# s.osx.vendored_frameworks = "Pod/Assets/osx/Mantle.framework"
 
 # Options for aws. If cocoapod can build successfully then this can be used
-# s.source = { :http => "http://riffle-dist.s3-website-us-west-2.amazonaws.com/iosRiffle.zip" }
-# s.source_files = 'iosRiffle/Pod/Classes/**/*.swift'
-# s.ios.vendored_frameworks = "iosRiffle/Pod/Assets/ios/Mantle.framework"
-# s.osx.vendored_frameworks = "iosRiffle/Pod/Assets/osx/Mantle.framework"
+ s.source = { :http => "http://riffle-dist.s3-website-us-west-2.amazonaws.com/iosRiffle.zip" }
+ s.source_files = 'iosRiffle/Pod/Classes/**/*.swift'
+ s.ios.vendored_frameworks = "iosRiffle/Pod/Assets/ios/Mantle.framework"
+ s.osx.vendored_frameworks = "iosRiffle/Pod/Assets/osx/Mantle.framework"
 
 end
