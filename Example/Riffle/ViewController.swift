@@ -13,7 +13,7 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        Riffle.setLogLevelInfo()
+        Riffle.setLogLevelDebug()
         Riffle.setFabricDev()
         
         print("Starting Tests")
@@ -34,5 +34,13 @@ class ViewController: UIViewController {
         }
         
         receiver.join()
+
+        
+        // Model Testing
+//        let app = Domain(name: "xs.demo.damouse.swiftstore")
+//        let me = Modeler(name: "tester", superdomain: app)
+//        
+//        me.setToken("1o1-sPF0NWy2kWcv0XHJxpVUkMHWblQrfa5-cVXcsMujjl-l3W2CNgFSR.1LIE6S-QNT31RCLWgRBvFyGFy0BznBOzvdS8Xr0z9i4iatUWDOV1EdH4PtVd4RDMA5yVr3Ioz2cdvHmWas4rA3plr8G-XiCCjzF7NYE-YYRiaOmZ0_")
+//        me.join()
     }
 }
