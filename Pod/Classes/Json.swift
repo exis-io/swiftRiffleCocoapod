@@ -105,7 +105,7 @@ public class DefaultJSONSerializer: JSONSerializer {
         if n == Double(Int64(n)) {
             return Int64(n).description
         } else {
-            return n.description
+            return "\(n)"
         }
     }
     
@@ -246,6 +246,9 @@ public enum JSON {
             else if let value = value as? Int {
                 jsonArray.append(JSON.from(Double(value)))
             }
+            else if let value = value as? UInt64 {
+                jsonArray.append(JSON.from(Double(value)))
+            }
             else if let value = value as? String {
                 jsonArray.append(JSON.from(value))
             }
@@ -275,7 +278,8 @@ public enum JSON {
                 jsonArray.append(JSON.from(rebuild))
             }
             else if let value = value as? [String: Any] {
-                jsonArray.append(JSON.from(value))
+                let v = JSON.from(value)
+                jsonArray.append(v)
             }
                 
             // Good old fashioned Objective-C hacks. Careful with this on ubuntu
@@ -297,26 +301,29 @@ public enum JSON {
     public static func from(value: [String: Any]) -> JSON {
         var jsonDictionary: [String: JSON] = [:]
         for (key, value) in value {
+            
             if let value = value as? Bool {
                 jsonDictionary[key] = JSON.from(value)
             }
-            if let value = value as? Double {
+            else if let value = value as? Double {
                 jsonDictionary[key] = JSON.from(value)
             }
-            if let value = value as? Float {
+            else if let value = value as? Float {
                 jsonDictionary[key] = JSON.from(Double(value))
             }
-            if let value = value as? Int {
+            else if let value = value as? Int {
                 jsonDictionary[key] = JSON.from(Double(value))
             }
-            if let value = value as? String {
+            else if let value = value as? String {
                 jsonDictionary[key] = JSON.from(value)
             }
-            if let value = value as? [Any] {
+            else if let value = value as? [Any] {
                 jsonDictionary[key] = JSON.from(value)
             }
-            if let value = value as? [String: Any] {
+            else if let value = value as? [String: Any] {
                 jsonDictionary[key] = JSON.from(value)
+            } else {
+                print("WARN: dictionary cant check type of \(value) \(value.dynamicType)")
             }
         }
         

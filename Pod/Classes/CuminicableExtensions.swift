@@ -145,6 +145,10 @@ extension String: Property, Convertible {
     }
     
     public static func unsafeDeserialize<T>(from: Any, t: T.Type) -> T? {
+        if let s = from as? String {
+            return caster!.recode(from as! String, t: t)
+        }
+        
         return recode(deserialize(switchTypes(from)), t.self)
     }
 
@@ -219,24 +223,18 @@ extension Bool: Property, Convertible {
     }
     
     public static func unsafeDeserialize<T>(from: Any, t: T.Type) -> T? {
-        return recode(deserialize(switchTypes(from)), t.self)
+        // Occasional segfault within recode
+        if let b = from as? Bool {
+            return caster!.recode(b, t: t)
+        }
+        
+        return recode(deserialize(from), t.self)
     }
 
     public static func representation() -> Any {
         return "bool"
     }
 }
-
-// Might work, but don't have time for it now
-//protocol Thing: Property, Convertible {}
-//extension Array: Thing {}
-//
-//
-//extension CollectionType where Self: Thing, Generator.Element : Convertible {
-//    internal static func quietRepresentation() -> Any {
-//        return Generator.Element.representation()
-//    }
-//}
 
 // TODO: Dictionaries
 extension Array : Property, BaseConvertible {
@@ -296,19 +294,23 @@ extension Array : Property, BaseConvertible {
             
             // Reconstruct values within the array
             for element in arr {
-                let switchedType = switchTypeObject(Generator.Element.self)                
-                if let child = switchedType as? Convertible.Type {
+                if let child = Generator.Element.self as? Convertible.Type {
                     ret.append(child.unsafeDeserialize(element, t: Generator.Element.self)!)
+                } else {
+                    let switchedType = switchTypeObject(Generator.Element.self)
+                    if let child = switchedType as? Convertible.Type {
+                        ret.append(child.unsafeDeserialize(element, t: Generator.Element.self)!)
+                    }
                 }
             }
-            
-//            return ret as! T
+
             return unsafeBitCast(ret, t.self)
         }
         
         Riffle.warn("Array unsafeDeserialize not given an array!")
-        return from as! T
-//        return unsafeBitCast(from, t.self)
+        let failsafe: [Generator.Element] = []
+        return unsafeBitCast(failsafe, T.self)
+        // return from as! T
     }
 
     public static func representation() -> Any {

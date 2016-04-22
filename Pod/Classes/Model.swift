@@ -10,6 +10,9 @@ import Foundation
 import Mantle
 
 public class Model: Silvery, Property, CustomStringConvertible {
+    // This changes the offsets of pointers in Silvery and as such is very dangerous. If removed
+    // subtract one from the literall offsets in pointerByOffset in Silver
+    public var _xsid = CBID()
     
     required public init() {}
     
@@ -24,7 +27,11 @@ public class Model: Silvery, Property, CustomStringConvertible {
     
     public func propertyNames() -> [String] {
         let ignored = ignoreProperties()
-        return Mirror(reflecting: self).children.filter { $0.label != nil && !ignored.contains($0.label!) }.map { $0.label! }
+         return Mirror(reflecting: self).children.filter { $0.label != nil && !ignored.contains($0.label!) }.map { $0.label! }
+        
+//        var ret = ["xsid"]
+//        ret.appendContentsOf(Mirror(reflecting: self).children.filter { $0.label != nil && !ignored.contains($0.label!) }.map { $0.label! })
+//        return ret
     }
 }
 
@@ -39,53 +46,62 @@ extension Model: Convertible {
     
     // Creates a new instance of this model object from the given json
     public static func deserialize(from: Any) -> Any {
-        guard let json = from as? [String: Any] else {
+        guard var json = from as? [String: Any] else {
             print("WARN: model wasn't given a json! Instead received type: \(from.dynamicType)")
             return from
         }
         
         var ret = self.init()
         
-        _ = ret.propertyNames().map {
-            let repr = "\(ret[$0]!.dynamicType.representation())"
+        // Handle the id seperately
+        if let id = json["_xsid"] {
+            json["_xsid"] = nil
+            ret._xsid = UInt64(id as! String)!
+        } else {
+            print("WARN: xsid not found!")
+        }
+    
+        for n in ret.propertyNames() {
+            let repr = "\(ret[n]!.dynamicType.representation())"
+            
             
             // JSON is returning ints as doubles. Correct that and this isn't needed: Json.swift line 882
             if repr == "int" {
-                if let value = json[$0] as? Double {
-                    ret[$0] = Int(value)
+                if let value = json[n] as? Double {
+                    ret[n] = Int(value)
                 }
-                else if let value = json[$0] as? Float {
-                    ret[$0] = Int(value)
+                else if let value = json[n] as? Float {
+                    ret[n] = Int(value)
                 }
                 else {
-                    Riffle.warn("Model deserialization unable to cast property \(json[$0]): \(json[$0].dynamicType)")
+                    Riffle.warn("Model deserialization unable to cast property \(json[n]): \(json[n].dynamicType)")
                 }
             }
                 
-            // Silvery cant understand assignments where the asigner is an AnyObject, so 
-            else if let value = json[$0] as? Bool where "\(repr)" == "bool" {
-                ret[$0] = value
+            // Silvery cant understand assignments where the asigner is an AnyObject, so
+            else if let value = json[n] as? Bool where "\(repr)" == "bool" {
+                ret[n] = value
             }
-            else if let value = json[$0] as? Double where "\(repr)" == "double" || "\(repr)" == "float" {
-                ret[$0] = value
+            else if let value = json[n] as? Double where "\(repr)" == "double" || "\(repr)" == "float" {
+                ret[n] = value
             }
-            else if let value = json[$0] as? Float where "\(repr)" == "double" || "\(repr)" == "float" {
-                ret[$0] = value
+            else if let value = json[n] as? Float where "\(repr)" == "double" || "\(repr)" == "float" {
+                ret[n] = value
             }
-            else if let value = json[$0] as? Int where "\(repr)" == "int" {
-                ret[$0] = value
+            else if let value = json[n] as? Int where "\(repr)" == "int" {
+                ret[n] = value
             }
-            else if let value = json[$0] as? String {
-                ret[$0] = value
+            else if let value = json[n] as? String {
+                ret[n] = value
             }
-            else if let value = json[$0] as? [Any] {
-                ret[$0] = value
+            else if let value = json[n] as? [Any] {
+                ret[n] = value
             }
-            else if let value = json[$0] as? [String: Any] {
-                ret[$0] = value
+            else if let value = json[n] as? [String: Any] {
+                ret[n] = value
             }
             else {
-                Riffle.warn("Model deserialization unable to cast property \(json[$0]): \(json[$0].dynamicType)")
+                Riffle.warn("Model deserialization unable to cast property \(json[n]): \(json[n].dynamicType)")
             }
         }
         
@@ -104,6 +120,8 @@ extension Model: Convertible {
             ret[property] = self[property]!
         }
         
+        ret["_xsid"] = String(_xsid)
+        
         return ret
     }
     
@@ -119,38 +137,6 @@ extension Model: Convertible {
         return fields
     }
 }
-
-// Core-based persistence
-extension Model {
-    public class func count() -> Deferred {
-        guard let connection = globalConnectionReference else {
-            Riffle.warn("Cannot access model object persistence until after joining")
-            // TODO: return an erred differ that fires once assigned
-            return Deferred()
-        }
-        
-        let d = Deferred(domain: connection)
-        ModelCount(d.cb, d.eb, "\(self.dynamicType)".cString(), "".cString())
-        return d
-    }
-}
-
-//extension Model: Equatable {}
-//
-//public func ==(lhs: Model, rhs: Model) -> Bool {
-//    // returns true iff every property matches in both 
-//    if lhs.propertyNames().count != rhs.propertyNames().count {
-//        return false
-//    }
-//    
-//    for name in lhs.propertyNames() {
-//        if lhs[name]! != rhs[name]! {
-//            return false
-//        }
-//    }
-//    
-//    return true
-//}
 
 
 

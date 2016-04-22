@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
 
 
 s.name             = "Riffle"
-s.version          = "0.2.47"
+s.version          = "0.3.0"
 s.summary          = "Client side library for connecting to a fabric."
 
 s.description      = <<-DESC
@@ -28,7 +28,9 @@ s.ios.vendored_frameworks = "Pod/Assets/ios/Mantle.framework"
 s.osx.vendored_frameworks = "Pod/Assets/osx/Mantle.framework"
 
 s.osx.xcconfig = { "EMBEDDED_CONTENT_CONTAINS_SWIFT" => "YES", "LD_RUNPATH_SEARCH_PATHS" => "$(inherited) @executable_path/Riffle-OSX"}
+
 s.ios.xcconfig = { "ENABLE_BITCODE" => "NO" } 
+
 
 end
 

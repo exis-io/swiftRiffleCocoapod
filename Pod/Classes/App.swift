@@ -9,56 +9,127 @@
 import Foundation
 import Mantle
 
-class App {
-    var mantleDomain: UInt64
+public class AppDomain: Domain {
     
-    var deferreds: [UInt64: Deferred] = [:]
-    var handlers: [UInt64: [Any] -> ()] = [:]
-    var registrations: [UInt64: [Any] -> [Any]] = [:]
-    
-    
-    init(domain: UInt64) {
-        mantleDomain = domain
-    }
-    
-    func handleInvocation(i: UInt64, arguments: [Any]) {
-        var args = arguments
+    public init(name: String) {
+        super.init(name: name, app: CoreApp(name: name))
         
-        if let d = self.deferreds[i] {
-            self.deferreds[d.cb] = nil
-            self.deferreds[d.eb] = nil
-            
-            if d.cb == i {
-                d.callback(args)
-            } else if d.eb == i {
-                d.errback(args)
-            }
-            
-        } else if let fn = self.handlers[i] {
-            fn(args)
-        } else if let fn = self.registrations[i] {
-            let resultId = args.removeAtIndex(0) as! Double
-            Yield(self.mantleDomain, UInt64(resultId), marshall(fn(args)))
+        // Kick off the session receive loop if it isn't already started
+        // TODO: figure out threading implementation for Ubuntu
+        if !Session.receiving {
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), {
+                Session.receive()
+            })
         }
     }
     
-    func receive() {
-        while true {
-            var (i, args) = decode(Receive(self.mantleDomain))
-            #if os(Linux)
-                handleInvocation(i, arguments: args)
-            #else
-            dispatch_async(dispatch_get_main_queue()) {
-                self.handleInvocation(i, arguments: args)
+    // If a previous session was suspended attempt to log back in with those same credentials
+    public func reconnect() -> OneDeferred<String> {
+        let d = OneDeferred<String>()
+        
+        // Check and see if there's a last session saved
+        if let domain = Riffle.load(SUSPENDED_DOMAIN), token = Riffle.load(SUSPENDED_TOKEN) {
+            app.callCore("SetToken", args: [token])
+            app.callCore("SetAgent", args: [domain])
+            
+            self.app.callCore("Connect").then { () -> () in
+                // "Static" initialization for all models and model connections
+                if !Model.ready() {
+                    Model.setConnection(self)
+                }
+                
+                let subbed  = self.name + "."
+                d.callback([domain.stringByReplacingOccurrencesOfString(subbed, withString: "")])
+            }.error { reason in
+                d.errback([reason])
             }
-            #endif
+            
+        } else {
+            d.errback(["No connection information stored. Connection information is only stored after a successful login"])
         }
+        
+        return d
+    }
+    
+    // Close the connection
+    public func disconnect() {
+        app.callCore("Close", args: ["AppDomain closing"])
+    }
+    
+    // Attempt to login and connect with the given credentials. If successful the connection is automatically opened
+    public func login(name: String, password: String? = nil) -> Deferred {
+        var args: [String] = [name]
+        
+        if let p = password {
+            args.append(p)
+        }
+        
+        // TODO: check for saved tokens for the given domain name and re-use that token as appropriate
+        
+        let d = TwoDeferred<String, String>()
+        let r = Deferred()
+        app.callCore("Login", deferred: d, args: [args])
+        
+        d.then { token, domain in
+            self.app.callCore("Connect").then { () -> () in
+                // "Static" initialization for all models and model connections
+                if !Model.ready() {
+                    Model.setConnection(self)
+                }
+                
+                Riffle.save(SUSPENDED_DOMAIN, value: domain)
+                Riffle.save(SUSPENDED_TOKEN, value: token)
+                Riffle.save(name, value: token)
+                
+                r.callback([])
+            }.error { reason in
+                r.errback([reason])
+            }
+        }.error { reason in
+            r.errback([reason])
+        }
+        
+        return r
+    }
+    
+    public func registerAccount(name: String, email: String, password: String) -> Deferred {
+        let d = Deferred()
+        
+        app.callCore("Register", args: [name, password, email, name]).then {
+            self.login(name, password: password).then {
+                d.callback([])
+            }.error { reason in
+                d.errback([reason])
+            }
+        }.error { reason in
+            d.errback([reason])
+        }
+        
+        return d
+    }
+    
+    public func setToken(token: String) {
+        app.callCore("SetToken", args: [token])
+    }
+    
+    // Block until the connection is closed. Only call this on backends!
+    public func listen() {
+        NSRunLoop.currentRunLoop().run()
     }
 }
 
-// Here for testing. May break terribly on ubuntu, in which case core changes are needed to allow tupled returns
-// Takes a tuple and returns it as an array
-func unpackTuple(tuple: Any) -> [Any] {
-    let mirror = Mirror(reflecting: tuple)
-    return mirror.children.map { $0.value as Any }
+// Internal App object
+class CoreApp: CoreClass {
+    init(name: String) {
+        super.init()
+        initCore("App",[name])
+    }
 }
+
+
+
+
+
+
+
+

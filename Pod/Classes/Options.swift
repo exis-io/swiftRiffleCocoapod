@@ -24,8 +24,8 @@ public struct Options {
     
     // Marshall the dictionary into a format suitible for the core
     // Returns true if the call requires a Details object in the handler
-    func marshall() -> UnsafeMutablePointer<Int8> {
-        var ret: [String: Any] = [:]
+    func marshall() -> [String: AnyObject] {
+        var ret: [String: AnyObject] = [:]
         
         // TODO: implement me
         if let p = progressive {
@@ -36,9 +36,7 @@ public struct Options {
             ret["details"] = true
         }
         
-        let json = JSON.from(ret)
-        let jsonString = json.serialize(DefaultJSONSerializer())
-        return jsonString.cString()
+        return ret
     }
 }
 

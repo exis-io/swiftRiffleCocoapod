@@ -27,7 +27,7 @@ public enum SilverError : ErrorType, CustomStringConvertible {
 
 
 extension Silvery {
-
+    
     public subscript (key: String) -> Property? {
         get {
             do {
@@ -63,7 +63,7 @@ extension Silvery {
             #endif
             
             guard let property = switched.dynamicType as? Property.Type else { throw SilverError.TypeDoesNotConformToProperty(type: switched.dynamicType) }
-            if child.label == key {//                print("HI")
+            if child.label == key {
                 try self.codeValue(value, type: switched.dynamicType, offset: offset)
                 return
             } else {
@@ -74,9 +74,9 @@ extension Silvery {
     
     mutating func pointerAdvancedBy(offset: Int) -> UnsafePointer<Int> {
         if let object = self as? AnyObject {
-            return UnsafePointer(bitPattern: unsafeAddressOf(object).hashValue).advancedBy(offset + 2)
+            return UnsafePointer(bitPattern: unsafeAddressOf(object).hashValue).advancedBy(offset + 2 + 1)
         } else {
-            return withUnsafePointer(&self) { UnsafePointer($0).advancedBy(offset) }
+            return withUnsafePointer(&self) { UnsafePointer($0).advancedBy(offset + 1) }
         }
     }
     
@@ -84,7 +84,7 @@ extension Silvery {
         let pointer = pointerAdvancedBy(offset)
         if let optionalPropertyType = type as? OptionalProperty.Type, let propertyType = optionalPropertyType.propertyType() {
             if let unwrap = value {
-                var optionalValue = unwrap 
+                var optionalValue = unwrap
                 try x(optionalValue, isY: propertyType)
                 optionalValue.codeOptionalInto(pointer)
             } else if let nilValue = type as? OptionalProperty.Type {
@@ -99,7 +99,7 @@ extension Silvery {
     
     func x(x: Any, isY y: Any.Type) throws {
         if x.dynamicType == y {
-        // } else if let x = x as? AnyObject, let y = y as? AnyClass where x.isKindOfClass(y) {
+            // } else if let x = x as? AnyObject, let y = y as? AnyClass where x.isKindOfClass(y) {
         } else {
             throw SilverError.CannotSetTypeAsType(x: x.dynamicType, y: y)
         }
@@ -112,7 +112,7 @@ extension Silvery {
                 
                 // OSX bug
                 var switched = child.value
-            
+                
                 #if os(OSX)
                     switched = switchTypes(child.value)
                 #endif

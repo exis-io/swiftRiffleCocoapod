@@ -10,6 +10,82 @@ import Foundation
 import CoreFoundation
 import Mantle
 
+let SUSPENDED_TOKEN = "_lastConnectionToken"
+let SUSPENDED_DOMAIN = "_lastConnectionDomain"
+let ID_UPPER_BOUND = UInt64(pow(Double(2), Double(53)))
+
+// Generate random uint64 values
+func CBID() -> UInt64 {
+    var rnd : UInt64 = 0
+    arc4random_buf(&rnd, sizeofValue(rnd))
+    return rnd % ID_UPPER_BOUND
+}
+
+// All public static configuration and library access
+public class Riffle {
+    #if os(Linux)
+    #else
+    static let store = NSUserDefaults.standardUserDefaults()
+    #endif
+    
+    class func save(key: String, value: String) {
+        #if os(Linux)
+            Riffle.warn("Persistence is not implemented on linux!")
+        #else
+            store.setObject(value, forKey: key)
+        #endif
+    }
+    
+    class func load(key: String) -> String? {
+        #if os(Linux)
+            Riffle.warn("Persistence is not implemented on linux!")
+            return nil
+        #else
+            guard let data = store.objectForKey(key) as? String else { return nil }
+            return data
+        #endif
+    }
+    
+    // Clear past saved authentication data
+    public class func clearAuthenticationStore() {
+        #if os(Linux)
+            Riffle.warn("Persistence is not implemented on linux!")
+        #else
+            store.removeObjectForKey(SUSPENDED_TOKEN)
+            store.removeObjectForKey(SUSPENDED_DOMAIN)
+        #endif
+    }
+    
+    // Log the given message with the riffle core
+    public class func application(s: String){ sendCore("MantleApplication", args: [s]) }
+    public class func debug(s: String){ sendCore("MantleDebug", args: [s]) }
+    public class func info(s: String){ sendCore("MantleInfo", args: [s]) }
+    public class func warn(s: String){ sendCore("MantleWarn", args: [s]) }
+    public class func error(s: String){ sendCore("MantleError", args: [s]) }
+    
+    // Set the current log level, filtering out logged messages *below* the set priority. Defaults to Error.
+    // From highest to lowest priority:
+    //      App:    developer messages
+    //      Error:  critical errors
+    //      Warn:   non-critical errors
+    //      Info:   information about domain operations, connection state, and performance
+    //      Debug:  full logging of all riffle protocol messages
+    public class func setLogLevelApp() { sendCore("SetLogLevelApp")  }
+    public class func setLogLevelOff() { sendCore("SetLogLevelOff")  }
+    public class func setLogLevelErr() { sendCore("SetLogLevelErr")  }
+    public class func setLogLevelWarn() { sendCore("SetLogLevelWarn")  }
+    public class func setLogLevelInfo() { sendCore("SetLogLevelInfo")  }
+    public class func setLogLevelDebug() { sendCore("SetLogLevelDebug")  }
+    
+    // Change the URL of the fabric you'd like to connect to. Defaults to Production (node.exis.io)
+    public class func setFabric(url: String) { sendCore("Fabric", args: [url]) }
+    public class func setFabricDev() { sendCore("SetFabricDev") }
+    public class func setFabricSandbox() { sendCore("SetFabricSandbox") }
+    public class func setFabricProduction() { sendCore("SetFabricProduction") }
+    public class func setFabricLocal() { sendCore("SetFabricLocal") }
+}
+
+
 extension String {
     func cString() -> UnsafeMutablePointer<Int8> {
         var ret: UnsafeMutablePointer<Int8> = UnsafeMutablePointer<Int8>()
@@ -33,6 +109,15 @@ extension String {
     }
 }
 
+// Repack arguments by converting to json and back
+func jsonRepack<A>(a: A) -> A? {
+    guard let a = a as? AnyObject else { return nil }
+    
+    let data = try! NSJSONSerialization.dataWithJSONObject(a, options: .PrettyPrinted)
+    let repacked = try! NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
+    return repacked as? A
+}
+
 // Decode arbitrary returns from the mantle
 func decode(p: UnsafePointer<Int8>) -> (UInt64, [Any]) {
     let dataString = String.fromCString(p)!
@@ -53,11 +138,10 @@ func decode(p: UnsafePointer<Int8>) -> (UInt64, [Any]) {
 func marshall(args: [Any]) -> UnsafeMutablePointer<Int8> {
     let json = JSON.from(args)
     let jsonString = json.serialize(DefaultJSONSerializer())
-    //print("Args: \(args) Json: \(json) String: \(jsonString)")
     return jsonString.cString()
 }
 
-// Do we still need this here? D
+// Do we still need this here?
 func serializeArguments(args: [Any]) -> [Any] {
     var ret: [Any] = []
     
@@ -71,9 +155,6 @@ func serializeArguments(args: [Any]) -> [Any] {
 }
 
 func serializeArguments(args: [Property]) -> [Any] {
-//    Riffle.debug("Serializing: \(args.dynamicType) \(args)")
-//    return args.map { $0.serialize() }
-    
     #if os(OSX)
         let c =  args.map { $0.unsafeSerialize() }
         return c
@@ -83,8 +164,7 @@ func serializeArguments(args: [Property]) -> [Any] {
 }
 
 
-// Technically this is part of the generic shotgun-- please merge
-// Convert any kind of handler return to an array of Any
+// Serialize the results of a handler. This is largely specific to OSX. Technically part of the generic shotgun
 func serializeResults(args: ()) -> [Any] {
     return []
 }
@@ -110,11 +190,6 @@ func serializeResults<A: PR, B: PR, C: PR, D: PR, E: PR>(args: (A, B, C, D, E)) 
 }
 
 func serializeResults(results: Property...) -> Any {
-    // Swift libraries are not technically supported on OSX targets-- Swift gets linked against twice
-    // Functionally this means that type checks in either the library or the app fail when the 
-    // type originates on the other end
-    // This method switches app types back to library types by checking type strings. Only runs on OSX
-    
     #if os(OSX)
         return results.map { $0.unsafeSerialize() }
     #else
@@ -122,177 +197,6 @@ func serializeResults(results: Property...) -> Any {
     #endif
 }
 
-func switchTypes<A>(x: A) -> Any {
-    // Converts app types to riffle types because of the osx bug (see above)
-    
-    #if os(OSX)
-        // return recode(x, switchTypeObject(x))
-        switch "\(x.dynamicType)" {
-        case "Int":
-            return recode(x, Int.self)
-        case "String":
-            return recode(x, String.self)
-        case "Double":
-            return recode(x, Double.self)
-        case "Float":
-            return recode(x, Float.self)
-        case "Bool":
-            return recode(x, Bool.self)
-        default:
-            Riffle.warn("Unable to switch o/Applications/Utilities/Script Editor.apput app type: \(x.dynamicType)")
-            return x
-        }
-    #else
-        return x
-    #endif
-}
-
-func switchTypeObject<A>(x: A) -> Any.Type {
-    // Same as the function above, but operates on types
-    // Converts app types to riffle types because of the osx bug (see above)
-    
-    #if os(OSX)
-        switch "\(x)" {
-        case "Int":
-            return Int.self
-        case "String":
-            return String.self
-        case "Double":
-            return Double.self
-        case "Float":
-            return Float.self
-        case "Bool":
-            return Bool.self
-        default:
-            Riffle.warn("Unable to switch out type object: \(x)")
-            return x as! Any.Type
-        }
-    #else
-        return x as! Any.Type
-    #endif
-}
-
-func encode<A>(var v:A) -> NSData {
-    // Returns the bytes from a swift variable
-    return withUnsafePointer(&v) { p in
-        // print("Original: \(p), type: \(A.self), size: \(strideof(A.self))")
-        return NSData(bytes: p, length: strideof(A))
-    }
-}
 
 
-func recode<A, T>(value: A, _ t: T.Type) -> T {
-    // encode and decode a value, magically transforming its type to the appropriate version
-    // This is a workaround for OSX crap, again
-    
-    // print("From \(A.self) \(value) to \(T.self)")
-    
-    if T.self == Bool.self {
-        func encodeBool<A>(var v:A) -> Bool {
-            // Returns the bytes from a swift variable
-            return withUnsafePointer(&v) { p in
-                let s = unsafeBitCast(p, UnsafePointer<Bool>.self)
-                
-                return s.memory == true
-            }
-        }
-
-        return encodeBool(value) as! T
-    }
-    
-    if T.self == String.self  {
-        
-        // Grab the pointer, copy out the bytes into a new string, and return it
-        func encodeString<A>(var v:A) -> String {
-            return withUnsafePointer(&v) { p in
-                let s = unsafeBitCast(p, UnsafePointer<String>.self)
-                
-                let dat = s.memory.dataUsingEncoding(NSUTF8StringEncoding)!
-                let ret = NSString(data: dat, encoding: NSUTF8StringEncoding)
-                
-                return ret as! String
-            }
-        }
-        
-        let r = encodeString(value)
-        return r as! T
-    }
-    
-    // copy the value as to not disturb the original
-    let copy = value
-    let data = encode(copy)
-    
-    let pointer = UnsafeMutablePointer<T>.alloc(sizeof(T.Type))
-    
-    data.getBytes(pointer)
-    return pointer.move()
-}
-
-
-// Makes configuration calls a little cleaner when accessed from the top level 
-// as well as keeping them all in one place
-public class Riffle {
-    public class func setFabric(url: String) {
-        MantleSetFabric(url.cString())
-    }
-
-    public class func application(s: String){
-        MantleApplication(s.cString())
-    }
-
-    public class func debug(s: String){
-        MantleDebug(s.cString())
-    }
-
-    public class func info(s: String){
-        MantleInfo(s.cString())
-    }
-
-    public class func warn(s: String){
-        MantleWarn(s.cString())
-    }
-
-    public class func error(s: String){
-        MantleError(s.cString())
-    }
-
-    public class func setLogLevelApp() { MantleSetLogLevelApp() }
-    public class func setLogLevelOff() { MantleSetLogLevelOff() }
-    public class func setLogLevelErr() { MantleSetLogLevelErr() }
-    public class func setLogLevelWarn() { MantleSetLogLevelWarn() }
-    public class func setLogLevelInfo() { MantleSetLogLevelInfo() }
-    public class func setLogLevelDebug() { MantleSetLogLevelDebug() }
-
-    public class func setFabricDev() { MantleSetFabricDev() }
-    public class func setFabricSandbox() { MantleSetFabricSandbox() }
-    public class func setFabricProduction() { MantleSetFabricProduction() }
-    public class func setFabricLocal() { MantleSetFabricLocal() }
-
-    public class func setCuminStrict() { MantleSetCuminStrict() }
-    public class func setCuminLoose() { MantleSetCuminLoose() }
-    public class func setCuminOff() { MantleSetCuminOff() }
-}
-
-
-
-
-// Create CBIDs on this side of the boundary. Note this makes them doubles, should be using byte arrays or 
-// uint64
-// TODO: Use this but convert to byte slices first
-//// Biggest random number that can be choosen
-//let randomMax = UInt32(pow(Double(2), Double(32)) - 1)
-//
-//func CBID() -> Double {
-//    // Create a random callback id
-//    let r = arc4random_uniform(randomMax);
-//    return Double(r)
-//}
-//
-//// Hahahahah. No.
-//// Pass bytes and avoid this nonsense.
-//extension Double {
-//    func go() -> String {
-//        return String(UInt64(self))
-//    }
-//}
 

@@ -9,38 +9,31 @@
 import UIKit
 import Riffle
 
+class Rat: Model {
+    var name = "Joe"
+    //    var age = 100
+}
+
+    
+
 class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        Riffle.setLogLevelDebug()
-        Riffle.setFabricDev()
-        
-        print("Starting Tests")
+        letdmtest(Rat.self)
 
-        // This is faking two seperate connections by creating another top level domain
-        // Not intended for regular use
-        let app = Domain(name: "xs.tester")
-        let receiver = Receiver(name: "receiver", superdomain: app)
-        
-        let app2 = Domain(name: "xs.tester")
-        let sender2 = Sender(name: "sender", superdomain: app2)
-        let receiver2 = Receiver(name: "receiver", superdomain: app2)
-        
-        sender2.receiver = receiver2
-        
-        receiver.joinFinished = {
-            sender2.join()
-        }
-        
-        receiver.join()
-
-        
-        // Model Testing
-//        let app = Domain(name: "xs.demo.damouse.swiftstore")
-//        let me = Modeler(name: "tester", superdomain: app)
+//        Riffle.setFabricDev()
 //        
-//        me.setToken("1o1-sPF0NWy2kWcv0XHJxpVUkMHWblQrfa5-cVXcsMujjl-l3W2CNgFSR.1LIE6S-QNT31RCLWgRBvFyGFy0BznBOzvdS8Xr0z9i4iatUWDOV1EdH4PtVd4RDMA5yVr3Ioz2cdvHmWas4rA3plr8G-XiCCjzF7NYE-YYRiaOmZ0_")
-//        me.join()
+//        // This is faking two seperate connections by creating two AppDomains. This is not intended for user functionality
+//        let app2 = AppDomain(name: "xs.tester")
+//        let receiver2 = Domain(name: "receiver", superdomain: app2)
+//        let sender2 = Sender(name: "sender", superdomain: app2, peer: receiver2)
+//        
+//        let app = AppDomain(name: "xs.tester")
+//        let receiver = Receiver(name: "receiver", superdomain: app, done: {
+//            app2.login("sender")
+//        })
+//        
+//        app.login("receiver")
     }
 }
